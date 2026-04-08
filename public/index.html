@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Radio Calico — Lossless Live Stream</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Open+Sans:wght@400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+  <!-- Nav -->
+  <nav>
+    <div class="nav-center">
+      <span class="nav-brand">Radio</span>
+      <img src="/RadioCalicoLogoTM.png" alt="Radio Calico" class="nav-logo-inline" />
+      <span class="nav-brand">Calico</span>
+    </div>
+    <div class="nav-right">
+      <span class="live-badge"><span class="live-dot"></span>Live</span>
+    </div>
+  </nav>
+
+  <!-- Page body -->
+  <div class="page-body">
+
+    <!-- Now Playing card -->
+    <div class="now-card">
+
+      <!-- Left: album art -->
+      <div class="now-art-col">
+        <img id="nowArt" alt="Album art" style="display:none" />
+      </div>
+
+      <!-- Right: track info + controls -->
+      <div class="now-info-col">
+        <div class="now-artist" id="nowArtist">—</div>
+        <div class="now-title"  id="nowTitle">—</div>
+        <div class="now-album"  id="nowAlbum"></div>
+
+        <div class="quality-info">
+          <span id="sourceQuality"></span>
+          <span id="streamQuality">Stream quality: Lossless HLS</span>
+        </div>
+
+        <div class="now-rating-row">
+          <span class="now-rating-label">Rate this track:</span>
+          <div class="rating-row" id="nowRatingRow" style="display:none">
+            <button class="rating-btn" id="nowThumbUp"   aria-label="Thumbs up">👍 <span id="nowUpCount">0</span></button>
+            <button class="rating-btn" id="nowThumbDown" aria-label="Thumbs down">👎 <span id="nowDownCount">0</span></button>
+          </div>
+        </div>
+
+        <div class="player-controls">
+          <button class="play-btn" id="playBtn" aria-label="Play">
+            <svg id="iconPlay" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M8 5v14l11-7z"/></svg>
+            <svg id="iconPause" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="display:none"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+          </button>
+          <div class="volume-row">
+            <span class="volume-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            </span>
+            <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8" aria-label="Volume" />
+            <span class="volume-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3A4.5 4.5 0 0 0 14 7.97v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            </span>
+          </div>
+        </div>
+        <div class="player-meta">
+          <p class="status" id="status">Ready</p>
+          <p class="elapsed" id="elapsed"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Previous tracks -->
+    <div class="previous-section">
+      <div class="previous-label">Previous tracks:</div>
+      <ul class="recent-list" id="recentList">
+        <li><span style="font-size:0.8125rem;color:#bbb;font-style:italic">Loading…</span></li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <img src="/RadioCalicoLogoTM.png" alt="Radio Calico" class="footer-logo" />
+    <p>&copy; 2026 Radio Calico &nbsp;·&nbsp; Lossless streaming, always free</p>
+  </footer>
+
+  <audio id="radio"></audio>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
