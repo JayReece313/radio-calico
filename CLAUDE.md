@@ -12,20 +12,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   ```
 - Verify with: `sleep 2 && cat /tmp/radiocalico.log`
 
-There are no tests (the `test` script is a placeholder).
+**Tests:** `npm test` (all), `npm run test:backend`, `npm run test:frontend` — 39 tests via Jest + Supertest + jsdom. See `README-TESTING.md` for full details.
 
 ## Architecture
 
 ### File structure
 ```
-server.js          Express entry point; serves /public as static, mounts /api
-routes/api.js      All API endpoints (token, ratings, users, posts, health)
-db/database.js     better-sqlite3 connection + schema init (runs on import)
+server.js               Express entry point; exports app for testing; listen is conditional
+routes/api.js           All API endpoints (token, ratings, users, posts, health)
+db/database.js          better-sqlite3 connection + schema init (runs on import)
 public/
-  index.html       HTML markup only
-  style.css        All CSS styles
-  app.js           All frontend JavaScript
+  index.html            HTML markup only
+  style.css             All CSS styles
+  ratings.js            Pure rating logic + utilities (votedSongs, songKey, applyCachedVote,
+                        applyRatingUI, formatTime, esc) — loaded before app.js in browser,
+                        exported via module.exports guard for Jest
+  app.js                Frontend entry point — HLS, DOM wiring, fetch calls, render functions
   RadioCalicoLogoTM.png
+tests/
+  setup/db.js           In-memory SQLite factory for backend tests
+  backend/
+    ratings.test.js     /api/ratings GET & POST tests (Supertest)
+    token.test.js       /api/token & /api/health tests (Supertest)
+  frontend/
+    utils.test.js       songKey, formatTime, esc unit tests
+    ratings.test.js     applyCachedVote & applyRatingUI DOM tests (jsdom)
 ```
 
 ### Backend
@@ -35,13 +46,13 @@ public/
 - User identity: server hashes the client IP with SHA-256 (`radiocalico:<ip>`) and returns it as a 1-year `rc_uid` cookie. If the cookie already exists and is valid, the same token is returned. Frontend reads it via `GET /api/token`.
 
 ### Frontend (`public/`)
-Split across three files with no build step, no framework. `index.html` is markup only; `style.css` has all styles; `app.js` has all JavaScript.
+Split across four files with no build step, no framework. `index.html` is markup only; `style.css` has all styles; `ratings.js` has all testable pure logic; `app.js` is the DOM entry point. Load order in index.html: `hls.js` → `ratings.js` → `app.js`.
 
 **HLS playback:** hls.js loaded from CDN; Safari falls back to native HLS. Stream URL is hardcoded as `const STREAM_URL`.
 
 **Metadata polling:** `fetchMetadata()` polls `metadatav2.json` at the same CDN host every 15 seconds. Fields used: `title`, `artist`, `album`, `prev_artist_1`–`prev_artist_5`, `prev_title_1`–`prev_title_5`.
 
-**Ratings flow:**
+**Ratings flow** (logic lives in `public/ratings.js`):
 1. On page load, `GET /api/token` resolves the user token before polling starts.
 2. `votedSongs` object is a client-side cache keyed by `songKey(artist, title)` → `"artist||title"`. It mirrors server truth and is used to lock buttons immediately on every render (no async gap).
 3. `applyCachedVote(upBtn, downBtn, artist, title)` — the canonical function for applying vote state. Only disables the **selected** button, leaving the other enabled so users can change their vote. Call this instead of manually toggling `disabled`.
