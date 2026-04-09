@@ -90,23 +90,9 @@ function stopTimer() {
   elapsedTimer = null;
 }
 
-function formatTime(s) {
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = s % 60;
-  const mm = String(m).padStart(2, '0');
-  const ss = String(sec).padStart(2, '0');
-  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
-}
-
 // ── Ratings ──────────────────────────────────────────────────────
-// Client-side vote cache — locks buttons immediately on re-render,
-// eliminating the async gap between reset and fetchRatings resolving.
-const votedSongs = {};
-
-function songKey(artist, title) {
-  return `${artist}||${title}`;
-}
+// votedSongs, songKey, applyCachedVote, applyRatingUI, formatTime, esc
+// are defined in ratings.js, loaded before this script.
 
 async function fetchRatings(artist, title) {
   const key = songKey(artist, title);
@@ -124,23 +110,6 @@ async function submitRating(artist, title, rating) {
     body: JSON.stringify({ song_key: songKey(artist, title), rating, user_token: USER_TOKEN }),
   });
   return res.json();
-}
-
-// Apply voted state from cache immediately (synchronous — no async gap).
-// Only the selected button is disabled; the other stays enabled to allow changing.
-function applyCachedVote(upBtn, downBtn, artist, title) {
-  const vote = votedSongs[songKey(artist, title)];
-  upBtn.disabled = false; downBtn.disabled = false;
-  upBtn.classList.remove('voted-up', 'voted-down');
-  downBtn.classList.remove('voted-up', 'voted-down');
-  if (vote === 1)  { upBtn.classList.add('voted-up');     upBtn.disabled = true; }
-  if (vote === -1) { downBtn.classList.add('voted-down'); downBtn.disabled = true; }
-}
-
-function applyRatingUI(upBtn, downBtn, upCount, downCount, data, artist, title) {
-  upCount.textContent   = data.thumbs_up;
-  downCount.textContent = data.thumbs_down;
-  applyCachedVote(upBtn, downBtn, artist, title);
 }
 
 // ── Artwork cache & fetcher ──────────────────────────────────────
@@ -295,10 +264,6 @@ async function renderRecent(d) {
 
     try { applyRecent(await fetchRatings(t.artist, t.title)); } catch { /* ignore */ }
   });
-}
-
-function esc(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 // Resolve user token from server, then start metadata polling
