@@ -20,18 +20,24 @@ A lossless internet radio web player with live metadata, cover art, and song rat
 | Frontend | Vanilla HTML / CSS / JS (no framework, no build step) |
 | HLS playback | hls.js (CDN) |
 | Cover art | iTunes Search API |
+| Testing | Jest + Supertest + jsdom (39 tests) |
 
 ## Project Structure
 
 ```
-server.js          Express entry point
-routes/api.js      REST API (token, ratings, users, posts)
-db/database.js     SQLite connection and schema
+server.js               Express entry point
+routes/api.js           REST API (token, ratings, users, posts)
+db/database.js          SQLite connection and schema
 public/
-  index.html       HTML markup
-  style.css        All styles
-  app.js           All frontend JavaScript
+  index.html            HTML markup
+  style.css             All styles
+  ratings.js            Pure rating logic and utilities
+  app.js                Frontend entry point (HLS, DOM, render)
   RadioCalicoLogoTM.png
+tests/
+  setup/db.js           In-memory SQLite factory for tests
+  backend/              API tests (Supertest)
+  frontend/             DOM and utility tests (jsdom)
 ```
 
 ## Getting Started
@@ -45,6 +51,16 @@ npm run dev      # auto-restarts on file changes
 ```
 
 Open `http://localhost:3000`.
+
+## Testing
+
+```bash
+npm test                 # all 39 tests
+npm run test:backend     # API tests only
+npm run test:frontend    # DOM and utility tests only
+```
+
+See [README-TESTING.md](README-TESTING.md) for full details on test structure and how to add new tests.
 
 ## API Endpoints
 
