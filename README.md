@@ -21,6 +21,7 @@ A lossless internet radio web player with live metadata, cover art, and song rat
 | HLS playback | hls.js (CDN) |
 | Cover art | iTunes Search API |
 | Testing | Jest + Supertest + jsdom (39 tests) |
+| Container | Docker (multi-stage) + Docker Compose |
 
 ## Project Structure
 
@@ -38,9 +39,38 @@ tests/
   setup/db.js           In-memory SQLite factory for tests
   backend/              API tests (Supertest)
   frontend/             DOM and utility tests (jsdom)
+Dockerfile              Multi-stage build (base → dev / prod-deps → production)
+docker-compose.yml      Production deployment
+docker-compose.dev.yml  Development with live reload
+.dockerignore
 ```
 
 ## Getting Started
+
+### Docker (recommended)
+
+**Development** — live reload, SQLite data persisted on host at `db/radiocalico.db`:
+
+```bash
+docker compose -f docker-compose.dev.yml up --build
+```
+
+**Production** — minimal image (~120 MB), SQLite data in a named Docker volume:
+
+```bash
+docker compose up --build        # foreground
+docker compose up -d --build     # detached
+```
+
+Set `PORT=8080` (or any port) in a `.env` file alongside the compose file to change the host port; the container always listens on 3000 internally.
+
+To inspect the database in either mode:
+```bash
+docker compose exec app sh
+# inside: sqlite3 db/radiocalico.db
+```
+
+### Without Docker
 
 **Prerequisites:** Node.js 18+
 
@@ -53,6 +83,8 @@ npm run dev      # auto-restarts on file changes
 Open `http://localhost:3000`.
 
 ## Testing
+
+Run tests on the host (the test suite is not included in the Docker image):
 
 ```bash
 npm test                 # all 39 tests

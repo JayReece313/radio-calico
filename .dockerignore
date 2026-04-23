@@ -1,0 +1,21 @@
+# Dependencies — reinstalled fresh inside the container
+node_modules/
+
+# Version control
+.git/
+.github/
+
+# SQLite runtime data — never bake database files into the image
+db/*.db
+db/*.db-wal
+db/*.db-shm
+
+# Test suite
+tests/
+
+# Documentation and dev-only assets
+*.md
+*.txt
+*.zip
+RadioCalicoLogoTM.png
+RadioCalicoLayout.png
