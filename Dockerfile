@@ -1,7 +1,8 @@
 # ─── Stage 1: base ─────────────────────────────────────────────────────────
 FROM node:20-alpine AS base
 
-# Build dependencies for better-sqlite3 native compilation
+# Build tools for better-sqlite3 native compilation (dev stage + tests only;
+# production uses pg which has no native bindings)
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app

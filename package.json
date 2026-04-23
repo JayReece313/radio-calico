@@ -19,11 +19,12 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "better-sqlite3": "^12.8.0",
     "cors": "^2.8.6",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "pg": "^8.13.3"
   },
   "devDependencies": {
+    "better-sqlite3": "^12.8.0",
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "supertest": "^7.2.2"

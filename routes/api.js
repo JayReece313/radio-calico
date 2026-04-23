@@ -3,7 +3,7 @@ const crypto  = require('crypto');
 const router  = express.Router();
 const db      = require('../db/database');
 
-// ── Token ─────────────────────────────────────────────────────────────
+// ── Token ──────────────────────────────────────────────────────────────────
 function parseCookie(header, name) {
   if (!header) return null;
   const pair = (header.split(';')).map(s => s.trim()).find(s => s.startsWith(name + '='));
@@ -24,52 +24,62 @@ router.get('/token', (req, res) => {
 
 // Health check
 router.get('/health', (req, res) => {
-  res.json({ status: 'ok', db: 'sqlite' });
+  res.json({ status: 'ok', db: process.env.DATABASE_URL ? 'postgres' : 'sqlite' });
 });
 
-// --- Users ---
-router.get('/users', (req, res) => {
-  const rows = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
-  res.json(rows);
+// ── Users ──────────────────────────────────────────────────────────────────
+router.get('/users', async (req, res) => {
+  const result = await db.query('SELECT * FROM users ORDER BY created_at DESC');
+  res.json(result.rows);
 });
 
-router.post('/users', (req, res) => {
+router.post('/users', async (req, res) => {
   const { name, email } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'name and email required' });
-  const stmt = db.prepare('INSERT INTO users (name, email) VALUES (?, ?)');
-  const info  = stmt.run(name, email);
-  res.status(201).json({ id: info.lastInsertRowid, name, email });
+  const result = await db.query(
+    'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id',
+    [name, email]
+  );
+  res.status(201).json({ id: result.rows[0].id, name, email });
 });
 
-// --- Posts ---
-router.get('/posts', (req, res) => {
-  const rows = db.prepare('SELECT * FROM posts ORDER BY created_at DESC').all();
-  res.json(rows);
+// ── Posts ──────────────────────────────────────────────────────────────────
+router.get('/posts', async (req, res) => {
+  const result = await db.query('SELECT * FROM posts ORDER BY created_at DESC');
+  res.json(result.rows);
 });
 
-router.post('/posts', (req, res) => {
+router.post('/posts', async (req, res) => {
   const { title, body, user_id } = req.body;
   if (!title) return res.status(400).json({ error: 'title required' });
-  const stmt = db.prepare('INSERT INTO posts (title, body, user_id) VALUES (?, ?, ?)');
-  const info  = stmt.run(title, body ?? null, user_id ?? null);
-  res.status(201).json({ id: info.lastInsertRowid, title, body, user_id });
+  const result = await db.query(
+    'INSERT INTO posts (title, body, user_id) VALUES ($1, $2, $3) RETURNING id',
+    [title, body ?? null, user_id ?? null]
+  );
+  res.status(201).json({ id: result.rows[0].id, title, body, user_id });
 });
 
-// --- Ratings ---
-router.get('/ratings', (req, res) => {
+// ── Ratings ────────────────────────────────────────────────────────────────
+router.get('/ratings', async (req, res) => {
   const { song_key, user_token } = req.query;
   if (!song_key) return res.status(400).json({ error: 'song_key required' });
 
-  const counts = db.prepare(`
+  const countsResult = await db.query(`
     SELECT
       SUM(CASE WHEN rating =  1 THEN 1 ELSE 0 END) AS thumbs_up,
       SUM(CASE WHEN rating = -1 THEN 1 ELSE 0 END) AS thumbs_down
-    FROM song_ratings WHERE song_key = ?
-  `).get(song_key);
+    FROM song_ratings WHERE song_key = $1
+  `, [song_key]);
 
-  const userRow = user_token
-    ? db.prepare('SELECT rating FROM song_ratings WHERE song_key = ? AND user_token = ?').get(song_key, user_token)
+  const userResult = user_token
+    ? await db.query(
+        'SELECT rating FROM song_ratings WHERE song_key = $1 AND user_token = $2',
+        [song_key, user_token]
+      )
     : null;
+
+  const counts  = countsResult.rows[0];
+  const userRow = userResult ? userResult.rows[0] : null;
 
   res.json({
     thumbs_up:   counts.thumbs_up   || 0,
@@ -78,21 +88,25 @@ router.get('/ratings', (req, res) => {
   });
 });
 
-router.post('/ratings', (req, res) => {
+router.post('/ratings', async (req, res) => {
   const { song_key, rating, user_token } = req.body;
   if (!song_key || !user_token) return res.status(400).json({ error: 'song_key and user_token required' });
   if (rating !== 1 && rating !== -1)  return res.status(400).json({ error: 'rating must be 1 or -1' });
 
-  db.prepare('INSERT OR REPLACE INTO song_ratings (song_key, rating, user_token) VALUES (?, ?, ?)')
-    .run(song_key, rating, user_token);
+  await db.query(`
+    INSERT INTO song_ratings (song_key, rating, user_token)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (song_key, user_token) DO UPDATE SET rating = EXCLUDED.rating
+  `, [song_key, rating, user_token]);
 
-  const counts = db.prepare(`
+  const countsResult = await db.query(`
     SELECT
       SUM(CASE WHEN rating =  1 THEN 1 ELSE 0 END) AS thumbs_up,
       SUM(CASE WHEN rating = -1 THEN 1 ELSE 0 END) AS thumbs_down
-    FROM song_ratings WHERE song_key = ?
-  `).get(song_key);
+    FROM song_ratings WHERE song_key = $1
+  `, [song_key]);
 
+  const counts = countsResult.rows[0];
   res.status(201).json({
     thumbs_up:   counts.thumbs_up   || 0,
     thumbs_down: counts.thumbs_down || 0,

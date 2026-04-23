@@ -17,9 +17,10 @@ app.get('/{*path}', (req, res) => {
 });
 
 if (require.main === module) {
-  app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-  });
+  const db = require('./db/database');
+  db.ready
+    .then(() => app.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`)))
+    .catch(err => { console.error('Startup failed:', err); process.exit(1); });
 }
 
 module.exports = app;
