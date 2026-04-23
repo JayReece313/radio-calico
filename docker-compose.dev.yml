@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: .
+      target: dev
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - .:/app              # bind-mount source so node --watch picks up changes
+      - /app/node_modules   # anonymous vol: keeps the Alpine-compiled node_modules
+                            # intact, preventing the host's node_modules from
+                            # shadowing the container's compiled better-sqlite3 binary
+      # Note: db/ is covered by the bind mount above — SQLite data lives on the
+      # host at db/radiocalico.db (gitignored), so no separate volume is needed.
+    restart: unless-stopped

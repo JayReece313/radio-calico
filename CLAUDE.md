@@ -4,6 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development Server
 
+The server can run directly on the host or inside Docker.
+
+### Docker (preferred)
+
+- **Dev (live reload):** `docker compose -f docker-compose.dev.yml up --build`
+- **Prod:** `docker compose up --build` (or `-d` for detached)
+- SQLite data persists on the host at `db/radiocalico.db` in dev, and in a named Docker volume in prod.
+- **Assume the dev container is already running.** To restart it after backend changes, Docker's `node --watch` handles restarts automatically when source files change.
+
+### Without Docker
+
 - **Start (production-like):** `npm start` → runs `node server.js` on port 3000
 - **Start (auto-restart on save):** `npm run dev` → runs `node --watch server.js`
 - **Assume the server is already running.** Do not start it unless backend code changed. If a restart is needed, use nohup so the process survives the shell session:
@@ -12,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   ```
 - Verify with: `sleep 2 && cat /tmp/radiocalico.log`
 
-**Tests:** `npm test` (all), `npm run test:backend`, `npm run test:frontend` — 39 tests via Jest + Supertest + jsdom. See `README-TESTING.md` for full details.
+**Tests:** `npm test` (all), `npm run test:backend`, `npm run test:frontend` — 39 tests via Jest + Supertest + jsdom. Run on the host; the test suite is excluded from the Docker image. See `README-TESTING.md` for full details.
 
 ## Architecture
 
@@ -37,7 +48,21 @@ tests/
   frontend/
     utils.test.js       songKey, formatTime, esc unit tests
     ratings.test.js     applyCachedVote & applyRatingUI DOM tests (jsdom)
+Dockerfile              Multi-stage build: base → dev (live reload) and prod-deps → production
+docker-compose.yml      Production deployment (named volume for SQLite)
+docker-compose.dev.yml  Development (source bind-mounted; SQLite on host at db/radiocalico.db)
+.dockerignore           Excludes node_modules, .git, db/*.db*, tests/, docs
 ```
+
+### Docker image stages
+- `base`: `node:20-alpine` + build tools (`python3 make g++`) + `npm ci`; compiles the `better-sqlite3` native binary
+- `dev`: extends `base`; source bind-mounted at runtime; `node --watch` provides live reload
+- `prod-deps`: extends `base`; strips devDependencies
+- `production`: fresh `node:20-alpine` + pruned `node_modules` + app files only (~120 MB)
+
+Both `base` and `production` use `node:20-alpine` (musl libc) — do not change the production base to `node:20-slim` (glibc) or the `better-sqlite3` binary will segfault.
+
+**Dev volume note:** In dev mode the `db/` directory is covered by the source bind mount (`.:/app`). The SQLite file lives on the host at `db/radiocalico.db` (gitignored). There is no separate Docker volume for `db/` in dev — adding one would shadow `db/database.js` and break the require.
 
 ### Backend
 - **Express 5** on port 3000 (env `PORT` overrides).
