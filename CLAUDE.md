@@ -9,8 +9,8 @@ The server can run directly on the host or inside Docker.
 ### Docker (preferred)
 
 - **Dev (live reload):** `docker compose -f docker-compose.dev.yml up --build`
-- **Prod:** `docker compose up --build` (or `-d` for detached)
-- SQLite data persists on the host at `db/radiocalico.db` in dev, and in a named Docker volume in prod.
+- **Prod:** `docker compose up --build` (or `-d` for detached) — 3-service stack: PostgreSQL, app, nginx on port 80.
+- SQLite data persists on the host at `db/radiocalico.db` in dev. Production uses PostgreSQL with data in the `pg-data` named volume.
 - **Assume the dev container is already running.** To restart it after backend changes, Docker's `node --watch` handles restarts automatically when source files change.
 
 ### Without Docker
@@ -30,8 +30,9 @@ The server can run directly on the host or inside Docker.
 ### File structure
 ```
 server.js               Express entry point; exports app for testing; listen is conditional
-routes/api.js           All API endpoints (token, ratings, users, posts, health)
-db/database.js          better-sqlite3 connection + schema init (runs on import)
+routes/api.js           All API endpoints (token, ratings, users, posts, health); fully async
+db/database.js          Dual-mode: pg.Pool when DATABASE_URL is set (prod), better-sqlite3 otherwise
+nginx.conf              Serves static files from public/; proxies /api/* to app:3000; dual IPv4/IPv6
 public/
   index.html            HTML markup only
   style.css             All CSS styles
@@ -41,7 +42,7 @@ public/
   app.js                Frontend entry point — HLS, DOM wiring, fetch calls, render functions
   RadioCalicoLogoTM.png
 tests/
-  setup/db.js           In-memory SQLite factory for backend tests
+  setup/db.js           In-memory SQLite factory for backend tests (pg-compatible query() adapter)
   backend/
     ratings.test.js     /api/ratings GET & POST tests (Supertest)
     token.test.js       /api/token & /api/health tests (Supertest)
@@ -49,7 +50,7 @@ tests/
     utils.test.js       songKey, formatTime, esc unit tests
     ratings.test.js     applyCachedVote & applyRatingUI DOM tests (jsdom)
 Dockerfile              Multi-stage build: base → dev (live reload) and prod-deps → production
-docker-compose.yml      Production deployment (named volume for SQLite)
+docker-compose.yml      Production: postgres:17-alpine + app + nginx:alpine (port 80, pg-data volume)
 docker-compose.dev.yml  Development (source bind-mounted; SQLite on host at db/radiocalico.db)
 .dockerignore           Excludes node_modules, .git, db/*.db*, tests/, docs
 ```
@@ -65,9 +66,11 @@ Both `base` and `production` use `node:20-alpine` (musl libc) — do not change 
 **Dev volume note:** In dev mode the `db/` directory is covered by the source bind mount (`.:/app`). The SQLite file lives on the host at `db/radiocalico.db` (gitignored). There is no separate Docker volume for `db/` in dev — adding one would shadow `db/database.js` and break the require.
 
 ### Backend
-- **Express 5** on port 3000 (env `PORT` overrides).
-- **SQLite** via `better-sqlite3` (synchronous API). Schema auto-creates on startup in `db/database.js`. Tables: `users`, `posts`, `song_ratings`.
-- `song_ratings` uses `UNIQUE(song_key, user_token)` + `INSERT OR REPLACE` to allow vote-changing atomically.
+- **Express 5** on port 3000 (env `PORT` overrides). In production, nginx sits in front and proxies `/api/*` to the app; the app port is not exposed to the host.
+- **Database** is dual-mode in `db/database.js`: `pg.Pool` when `DATABASE_URL` is set (production), `better-sqlite3` with a pg-compatible `query()` adapter otherwise (dev/bare-metal). All callers use `await db.query(sql, [params])`.
+- Schema auto-creates on startup. Tables: `users`, `posts`, `song_ratings`.
+- `song_ratings` uses `UNIQUE(song_key, user_token)` + `INSERT … ON CONFLICT … DO UPDATE SET rating = EXCLUDED.rating` to allow vote-changing atomically.
+- `server.js` awaits `db.ready` before calling `app.listen` so the schema is always initialized before the first request.
 - User identity: server hashes the client IP with SHA-256 (`radiocalico:<ip>`) and returns it as a 1-year `rc_uid` cookie. If the cookie already exists and is valid, the same token is returned. Frontend reads it via `GET /api/token`.
 
 ### Frontend (`public/`)

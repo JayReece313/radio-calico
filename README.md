@@ -8,7 +8,7 @@ A lossless internet radio web player with live metadata, cover art, and song rat
 - **Now Playing** — live track metadata (artist, title, album, source quality) polled every 15 seconds
 - **Recently Played** — last 5 tracks with ratings
 - **Cover art** — fetched automatically from the iTunes Search API
-- **Song ratings** — thumbs up / thumbs down per track, stored in SQLite; one vote per user with the ability to change it
+- **Song ratings** — thumbs up / thumbs down per track; one vote per user with the ability to change it; stored in PostgreSQL (prod) or SQLite (dev)
 - **Persistent user identity** — IP-based anonymous token set as a 1-year cookie, no login required
 
 ## Tech Stack
@@ -16,7 +16,9 @@ A lossless internet radio web player with live metadata, cover art, and song rat
 | Layer | Technology |
 |---|---|
 | Server | Node.js + Express 5 |
-| Database | SQLite via better-sqlite3 |
+| Database (prod) | PostgreSQL 17 via pg |
+| Database (dev) | SQLite via better-sqlite3 |
+| Reverse proxy | nginx (serves statics, proxies `/api/*`) |
 | Frontend | Vanilla HTML / CSS / JS (no framework, no build step) |
 | HLS playback | hls.js (CDN) |
 | Cover art | iTunes Search API |
@@ -28,7 +30,8 @@ A lossless internet radio web player with live metadata, cover art, and song rat
 ```
 server.js               Express entry point
 routes/api.js           REST API (token, ratings, users, posts)
-db/database.js          SQLite connection and schema
+db/database.js          Dual-mode DB: pg.Pool (prod) or better-sqlite3 (dev)
+nginx.conf              nginx: serves statics, proxies /api/* to app:3000
 public/
   index.html            HTML markup
   style.css             All styles
@@ -40,8 +43,8 @@ tests/
   backend/              API tests (Supertest)
   frontend/             DOM and utility tests (jsdom)
 Dockerfile              Multi-stage build (base → dev / prod-deps → production)
-docker-compose.yml      Production deployment
-docker-compose.dev.yml  Development with live reload
+docker-compose.yml      Production: postgres + app + nginx (port 80)
+docker-compose.dev.yml  Development with live reload (SQLite, port 3000)
 .dockerignore
 ```
 
@@ -55,19 +58,18 @@ docker-compose.dev.yml  Development with live reload
 docker compose -f docker-compose.dev.yml up --build
 ```
 
-**Production** — minimal image (~120 MB), SQLite data in a named Docker volume:
+**Production** — 3-service stack: PostgreSQL, Express app, nginx on port 80:
 
 ```bash
 docker compose up --build        # foreground
 docker compose up -d --build     # detached
 ```
 
-Set `PORT=8080` (or any port) in a `.env` file alongside the compose file to change the host port; the container always listens on 3000 internally.
+Set `POSTGRES_PASSWORD=secret` in a `.env` file to override the default password. Set `PORT=8080` to expose nginx on a different host port.
 
-To inspect the database in either mode:
+To inspect the database:
 ```bash
-docker compose exec app sh
-# inside: sqlite3 db/radiocalico.db
+docker compose exec postgres psql -U radiocalico radiocalico
 ```
 
 ### Without Docker
