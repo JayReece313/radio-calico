@@ -92,6 +92,17 @@ Run tests on the host (the test suite is not included in the Docker image):
 npm test                 # all 39 tests
 npm run test:backend     # API tests only
 npm run test:frontend    # DOM and utility tests only
+npm run test:security    # npm audit (fails on moderate+ vulnerabilities)
+```
+
+Or use the Makefile:
+
+```bash
+make test
+make test-backend
+make test-frontend
+make security            # npm audit
+make audit-fix           # auto-fix audit vulnerabilities
 ```
 
 See [README-TESTING.md](README-TESTING.md) for full details on test structure and how to add new tests.

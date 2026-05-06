@@ -25,6 +25,8 @@ The server can run directly on the host or inside Docker.
 
 **Tests:** `npm test` (all), `npm run test:backend`, `npm run test:frontend` — 39 tests via Jest + Supertest + jsdom. Run on the host; the test suite is excluded from the Docker image. See `README-TESTING.md` for full details.
 
+**Security scanning:** `npm run test:security` or `make security` — runs `npm audit --audit-level=moderate`. `make audit-fix` auto-remediates where possible.
+
 ## Architecture
 
 ### File structure
