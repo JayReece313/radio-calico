@@ -20,6 +20,7 @@ services:
       target: production
     environment:
       - DATABASE_URL=postgresql://radiocalico:${POSTGRES_PASSWORD:-radiocalico}@postgres:5432/radiocalico
+      - NODE_ENV=production
     depends_on:
       postgres:
         condition: service_healthy

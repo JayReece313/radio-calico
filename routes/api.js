@@ -10,15 +10,22 @@ function parseCookie(header, name) {
   return pair ? pair.slice(name.length + 1) : null;
 }
 
+const COOKIE_OPTIONS = {
+  maxAge: 365 * 24 * 3600 * 1000,
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+};
+
 router.get('/token', (req, res) => {
   const existing = parseCookie(req.headers.cookie, 'rc_uid');
   if (existing && /^[0-9a-f]{64}$/.test(existing)) {
-    res.cookie('rc_uid', existing, { maxAge: 365 * 24 * 3600 * 1000, sameSite: 'strict' });
+    res.cookie('rc_uid', existing, COOKIE_OPTIONS);
     return res.json({ token: existing });
   }
   const ip    = ((req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')).split(',')[0].trim();
   const token = crypto.createHash('sha256').update(`radiocalico:${ip}`).digest('hex');
-  res.cookie('rc_uid', token, { maxAge: 365 * 24 * 3600 * 1000, sameSite: 'strict' });
+  res.cookie('rc_uid', token, COOKIE_OPTIONS);
   res.json({ token });
 });
 

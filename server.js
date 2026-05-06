@@ -5,7 +5,7 @@ const path    = require('path');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+app.use(cors(process.env.CORS_ORIGIN ? { origin: process.env.CORS_ORIGIN } : { origin: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
