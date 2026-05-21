@@ -6,29 +6,45 @@ if (process.env.DATABASE_URL) {
   const { Pool } = require('pg');
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-  const ready = pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id         BIGSERIAL PRIMARY KEY,
-      name       TEXT      NOT NULL,
-      email      TEXT      NOT NULL UNIQUE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS posts (
-      id         BIGSERIAL PRIMARY KEY,
-      title      TEXT      NOT NULL,
-      body       TEXT,
-      user_id    BIGINT    REFERENCES users(id) ON DELETE CASCADE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE TABLE IF NOT EXISTS song_ratings (
-      id         BIGSERIAL PRIMARY KEY,
-      song_key   TEXT      NOT NULL,
-      rating     INTEGER   NOT NULL CHECK (rating IN (1, -1)),
-      user_token TEXT      NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (song_key, user_token)
-    );
-  `);
+  const ready = (async () => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          id         BIGSERIAL PRIMARY KEY,
+          name       TEXT      NOT NULL,
+          email      TEXT      NOT NULL UNIQUE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS posts (
+          id         BIGSERIAL PRIMARY KEY,
+          title      TEXT      NOT NULL,
+          body       TEXT,
+          user_id    BIGINT    REFERENCES users(id) ON DELETE CASCADE,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS song_ratings (
+          id         BIGSERIAL PRIMARY KEY,
+          song_key   TEXT      NOT NULL,
+          rating     INTEGER   NOT NULL CHECK (rating IN (1, -1)),
+          user_token TEXT      NOT NULL,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE (song_key, user_token)
+        )
+      `);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  })();
 
   ready.catch(err => { console.error('Schema init failed:', err); process.exit(1); });
 
