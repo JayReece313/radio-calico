@@ -43,11 +43,18 @@ router.get('/users', async (req, res) => {
 router.post('/users', async (req, res) => {
   const { name, email } = req.body;
   if (!name || !email) return res.status(400).json({ error: 'name and email required' });
-  const result = await db.query(
-    'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id',
-    [name, email]
-  );
-  res.status(201).json({ id: result.rows[0].id, name, email });
+  try {
+    const result = await db.query(
+      'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id',
+      [name, email]
+    );
+    res.status(201).json({ id: result.rows[0].id, name, email });
+  } catch (err) {
+    if (err.code === '23505' || err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+      return res.status(409).json({ error: 'email already exists' });
+    }
+    throw err;
+  }
 });
 
 // ── Posts ──────────────────────────────────────────────────────────────────
