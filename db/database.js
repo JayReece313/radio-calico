@@ -87,15 +87,17 @@ if (process.env.DATABASE_URL) {
   db.query = function(text, params = []) {
     const sql = text.replace(/\$\d+/g, '?');
     const upper = sql.trim().toUpperCase();
-    const returningMatch = sql.match(/\sRETURNING\s+(\w+)/i);
+    const returningMatch = sql.match(/\sRETURNING\s+(\*|[\w,\s]+)/i);
 
     if (upper.startsWith('SELECT')) {
       const rows = this.prepare(sql).all(...params);
       return Promise.resolve({ rows, rowCount: rows.length });
     }
     if (returningMatch) {
-      const col = returningMatch[1];
-      const info = this.prepare(sql.replace(/\sRETURNING\s+\w+/i, '')).run(...params);
+      const clause = returningMatch[1].trim();
+      // RETURNING * or multi-column: best SQLite can do is return the inserted id
+      const col = (clause === '*' || clause.includes(',')) ? 'id' : clause;
+      const info = this.prepare(sql.replace(/\sRETURNING\s+.+$/i, '')).run(...params);
       return Promise.resolve({ rows: [{ [col]: info.lastInsertRowid }], rowCount: 1 });
     }
     const info = this.prepare(sql).run(...params);
