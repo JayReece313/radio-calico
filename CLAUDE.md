@@ -65,7 +65,7 @@ docker-compose.dev.yml  Development (source bind-mounted; SQLite on host at db/r
 - `prod-deps`: extends `base`; strips devDependencies
 - `production`: fresh `node:20-alpine` + pruned `node_modules` + app files only (~120 MB)
 
-Both `base` and `production` use `node:20-alpine` (musl libc) — do not change the production base to `node:20-slim` (glibc) or the `better-sqlite3` binary will segfault.
+`better-sqlite3` is a devDependency and is absent from the production image (stripped by `npm prune`). Production uses `pg` which has no native bindings. Do not change the production base to `node:20-slim` (glibc) — if `better-sqlite3` is ever promoted to a prod dependency, the binary compiled on musl (alpine) in `base` would segfault on glibc.
 
 **Dev volume note:** In dev mode the `db/` directory is covered by the source bind mount (`.:/app`). The SQLite file lives on the host at `db/radiocalico.db` (gitignored). There is no separate Docker volume for `db/` in dev — adding one would shadow `db/database.js` and break the require.
 

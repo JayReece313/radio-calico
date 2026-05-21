@@ -33,9 +33,10 @@ FROM node:20-alpine AS production
 WORKDIR /app
 
 # Copy only pruned node_modules — no build tools needed in the final image
-# IMPORTANT: both base and this stage use node:20-alpine (musl libc), so the
-# better-sqlite3 .node binary compiled in base is valid here. Do not change
-# the runtime image to node:20-slim (glibc) or the binary will segfault.
+# better-sqlite3 is a devDependency and is absent here (stripped by npm prune).
+# Production uses pg (no native bindings). Do not change the base image to
+# node:20-slim (glibc) — if better-sqlite3 is ever added back as a prod dep,
+# the .node binary compiled on musl (alpine) would segfault on glibc.
 COPY --from=prod-deps /app/node_modules ./node_modules
 
 COPY server.js ./
