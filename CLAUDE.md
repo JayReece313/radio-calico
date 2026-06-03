@@ -27,7 +27,7 @@ The server can run directly on the host or inside Docker.
 
 **Security scanning:** `npm run test:security` or `make security` — runs `npm audit --audit-level=moderate`. `make audit-fix` auto-remediates where possible.
 
-**Security hardening (production):** `NODE_ENV=production` is set in `docker-compose.yml`. This activates the `Secure` cookie flag on `rc_uid`. CORS defaults to same-origin only; set `CORS_ORIGIN=https://yourdomain.com` in the app environment to allow a specific external origin. nginx serves `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and a `Content-Security-Policy` header covering all external origins used by the app (jsdelivr, Google Fonts, CloudFront CDN, iTunes API, mzstatic.com images).
+**Security hardening (production):** The `rc_uid` cookie's `Secure` flag is derived per request from `req.secure` / `X-Forwarded-Proto` (Express `trust proxy` is set to `1` so the header from nginx is honored). Override with `COOKIE_SECURE=true|false`; default `auto`. CORS defaults to same-origin only; set `CORS_ORIGIN=https://yourdomain.com` in the app environment to allow a specific external origin. nginx serves `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and a `Content-Security-Policy` header covering all external origins used by the app (jsdelivr, Google Fonts, CloudFront CDN, iTunes API, mzstatic.com images).
 
 ## Architecture
 

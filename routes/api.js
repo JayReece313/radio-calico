@@ -10,22 +10,33 @@ function parseCookie(header, name) {
   return pair ? pair.slice(name.length + 1) : null;
 }
 
-const COOKIE_OPTIONS = {
+const COOKIE_BASE = {
   maxAge: 365 * 24 * 3600 * 1000,
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
   sameSite: 'strict',
 };
 
+// COOKIE_SECURE=auto (default): derive per-request from req.secure /
+// X-Forwarded-Proto. =true or =false forces the flag regardless of protocol.
+function cookieOptions(req) {
+  const mode = (process.env.COOKIE_SECURE || 'auto').toLowerCase();
+  let secure;
+  if (mode === 'true')       secure = true;
+  else if (mode === 'false') secure = false;
+  else                       secure = req.secure || req.get('x-forwarded-proto') === 'https';
+  return { ...COOKIE_BASE, secure };
+}
+
 router.get('/token', (req, res) => {
+  const opts = cookieOptions(req);
   const existing = parseCookie(req.headers.cookie, 'rc_uid');
   if (existing && /^[0-9a-f]{64}$/.test(existing)) {
-    res.cookie('rc_uid', existing, COOKIE_OPTIONS);
+    res.cookie('rc_uid', existing, opts);
     return res.json({ token: existing });
   }
   const ip    = ((req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')).split(',')[0].trim();
   const token = crypto.createHash('sha256').update(`radiocalico:${ip}`).digest('hex');
-  res.cookie('rc_uid', token, COOKIE_OPTIONS);
+  res.cookie('rc_uid', token, opts);
   res.json({ token });
 });
 

@@ -5,6 +5,10 @@ const path    = require('path');
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
+// Trust the first proxy hop (nginx) so req.secure reflects X-Forwarded-Proto
+// and req.ip reflects the real client IP.
+app.set('trust proxy', 1);
+
 app.use(cors(process.env.CORS_ORIGIN ? { origin: process.env.CORS_ORIGIN } : { origin: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
