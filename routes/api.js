@@ -34,7 +34,9 @@ router.get('/token', (req, res) => {
     res.cookie('rc_uid', existing, opts);
     return res.json({ token: existing });
   }
-  const ip    = ((req.headers['x-forwarded-for'] || req.socket.remoteAddress || '')).split(',')[0].trim();
+  // Prefer X-Real-IP (set by nginx to $remote_addr — not client-controlled)
+  // over X-Forwarded-For, whose leftmost entry a client can spoof.
+  const ip    = (req.get('x-real-ip') || req.socket.remoteAddress || '').trim();
   const token = crypto.createHash('sha256').update(`radiocalico:${ip}`).digest('hex');
   res.cookie('rc_uid', token, opts);
   res.json({ token });
