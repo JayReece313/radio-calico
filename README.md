@@ -164,14 +164,21 @@ First paint costs ~250 KB raw, and almost none of it is cached for repeat visits
 
 3. **Pin `hls.js` and add `defer`**
    - The current tag is `https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js` — synchronous and bound to a moving `@latest` URL, which means a new CDN object on every hls.js release.
-   - Recommended:
+   - Recommended (replace `REPLACE_WITH_REAL_HASH` before committing — see one-liner below):
      ```html
      <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"
-             integrity="sha384-…" crossorigin="anonymous"></script>
+             integrity="sha384-REPLACE_WITH_REAL_HASH"
+             crossorigin="anonymous"></script>
      <script defer src="/ratings.js"></script>
      <script defer src="/app.js"></script>
      ```
-   - `defer` also removes a subtle race: `app.js` calls `Hls.isSupported()` synchronously and works today only because the script tag sits at body-end.
+   - **Generate the SRI hash before pasting the snippet** — the placeholder above will cause the browser to block `hls.min.js` (and then `Hls` is undefined when `app.js` calls `Hls.isSupported()`). On macOS/Linux:
+     ```bash
+     curl -sSL https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js \
+       | openssl dgst -sha384 -binary | openssl base64 -A
+     ```
+     Prepend `sha384-` to the output and paste it into the `integrity` attribute. If you'd rather skip SRI entirely, delete the `integrity` attribute (the pinned version + `crossorigin="anonymous"` is still a meaningful improvement over `@latest`).
+   - `defer` makes it safe to move the scripts out of body-end while keeping execution ordered relative to each other. The real load-time requirement is **execution order** — `hls.min.js` must run before `app.js`, because `app.js` calls `Hls.isSupported()` at top level — and a secondary dependency on DOM readiness for the elements `app.js` queries. Today's correctness comes from the tags appearing in that order in `index.html`; moving them into `<head>` with `defer` preserves both invariants (deferred scripts execute after the document is parsed, in document order).
 
 4. **Set explicit `width` / `height` on `<img>` tags**
    - Both `#nowArt` and `.footer-logo` lack intrinsic sizes in markup, so the browser reflows when they load (Cumulative Layout Shift hit). One attribute pair on each fixes it.
@@ -183,6 +190,7 @@ First paint costs ~250 KB raw, and almost none of it is cached for repeat visits
    - `preconnect` to `fonts.gstatic.com` is set, but the actual WOFF2 URLs aren't known until the Google CSS arrives — that's two RTTs before text renders. Either:
      - Add `<link rel="preload" as="font" type="font/woff2" href="..." crossorigin>` for the specific WOFF2 file used, **or**
      - Self-host both families (~30 KB woff2 each) and serve them with the cache headers from fix #1.
+   - **CSP update required when self-hosting.** The current `Content-Security-Policy` in `nginx.conf` restricts `font-src` to `fonts.gstatic.com` only — `'self'` is **not** allowed, so locally-served WOFF2 files would be blocked by the browser. Before this fix can ship, add `'self'` to `font-src` (e.g. `font-src 'self' fonts.gstatic.com`). If the Google Fonts CSS is also pulled in-house, the inline `<link>` tag will then load from `'self'`, which `style-src` already permits — but verify, and if the CSS itself moves to a separate file under `/public`, no further `style-src` change is needed. Only the `font-src` change is mandatory.
 
 ### Smaller wins (optional)
 
