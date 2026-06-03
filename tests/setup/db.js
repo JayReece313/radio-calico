@@ -29,6 +29,25 @@ function createTestDb() {
       UNIQUE (song_key, user_token)
     );
   `);
+  // pg-compatible query() adapter — routes/api.js uses await db.query() exclusively
+  db.query = function(text, params = []) {
+    const sql = text.replace(/\$\d+/g, '?');
+    const upper = sql.trim().toUpperCase();
+    const returningMatch = sql.match(/\sRETURNING\s+(\w+)/i);
+    if (upper.startsWith('SELECT')) {
+      const rows = this.prepare(sql).all(...(params || []));
+      return Promise.resolve({ rows, rowCount: rows.length });
+    }
+    if (returningMatch) {
+      const col = returningMatch[1];
+      const info = this.prepare(sql.replace(/\sRETURNING\s+\w+/i, '')).run(...(params || []));
+      return Promise.resolve({ rows: [{ [col]: info.lastInsertRowid }], rowCount: 1 });
+    }
+    const info = this.prepare(sql).run(...(params || []));
+    return Promise.resolve({ rows: [], rowCount: info.changes });
+  };
+  db.ready = Promise.resolve();
+
   return db;
 }
 

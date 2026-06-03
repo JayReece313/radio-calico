@@ -9,8 +9,8 @@ The server can run directly on the host or inside Docker.
 ### Docker (preferred)
 
 - **Dev (live reload):** `docker compose -f docker-compose.dev.yml up --build`
-- **Prod:** `docker compose up --build` (or `-d` for detached)
-- SQLite data persists on the host at `db/radiocalico.db` in dev, and in a named Docker volume in prod.
+- **Prod:** `docker compose up --build` (or `-d` for detached) — 3-service stack: PostgreSQL, app, nginx on port 80.
+- SQLite data persists on the host at `db/radiocalico.db` in dev. Production uses PostgreSQL with data in the `pg-data` named volume.
 - **Assume the dev container is already running.** To restart it after backend changes, Docker's `node --watch` handles restarts automatically when source files change.
 
 ### Without Docker
@@ -25,13 +25,18 @@ The server can run directly on the host or inside Docker.
 
 **Tests:** `npm test` (all), `npm run test:backend`, `npm run test:frontend` — 39 tests via Jest + Supertest + jsdom. Run on the host; the test suite is excluded from the Docker image. See `README-TESTING.md` for full details.
 
+**Security scanning:** `npm run test:security` or `make security` — runs `npm audit --audit-level=moderate`. `make audit-fix` auto-remediates where possible.
+
+**Security hardening (production):** The `rc_uid` cookie's `Secure` flag is derived per request from `req.secure` / `X-Forwarded-Proto` (Express `trust proxy` is set to `1` so the header from nginx is honored). Override with `COOKIE_SECURE=true|false`; default `auto`. CORS defaults to same-origin only; set `CORS_ORIGIN=https://yourdomain.com` in the app environment to allow a specific external origin. nginx serves `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and a `Content-Security-Policy` header covering all external origins used by the app (jsdelivr, Google Fonts, CloudFront CDN, iTunes API, mzstatic.com images).
+
 ## Architecture
 
 ### File structure
 ```
 server.js               Express entry point; exports app for testing; listen is conditional
-routes/api.js           All API endpoints (token, ratings, users, posts, health)
-db/database.js          better-sqlite3 connection + schema init (runs on import)
+routes/api.js           All API endpoints (token, ratings, users, posts, health); fully async
+db/database.js          Dual-mode: pg.Pool when DATABASE_URL is set (prod), better-sqlite3 otherwise
+nginx.conf              Serves static files from public/; proxies /api/* to app:3000; dual IPv4/IPv6
 public/
   index.html            HTML markup only
   style.css             All CSS styles
@@ -41,7 +46,7 @@ public/
   app.js                Frontend entry point — HLS, DOM wiring, fetch calls, render functions
   RadioCalicoLogoTM.png
 tests/
-  setup/db.js           In-memory SQLite factory for backend tests
+  setup/db.js           In-memory SQLite factory for backend tests (pg-compatible query() adapter)
   backend/
     ratings.test.js     /api/ratings GET & POST tests (Supertest)
     token.test.js       /api/token & /api/health tests (Supertest)
@@ -49,7 +54,7 @@ tests/
     utils.test.js       songKey, formatTime, esc unit tests
     ratings.test.js     applyCachedVote & applyRatingUI DOM tests (jsdom)
 Dockerfile              Multi-stage build: base → dev (live reload) and prod-deps → production
-docker-compose.yml      Production deployment (named volume for SQLite)
+docker-compose.yml      Production: postgres:17-alpine + app + nginx:alpine (port 80, pg-data volume)
 docker-compose.dev.yml  Development (source bind-mounted; SQLite on host at db/radiocalico.db)
 .dockerignore           Excludes node_modules, .git, db/*.db*, tests/, docs
 ```
@@ -60,15 +65,17 @@ docker-compose.dev.yml  Development (source bind-mounted; SQLite on host at db/r
 - `prod-deps`: extends `base`; strips devDependencies
 - `production`: fresh `node:20-alpine` + pruned `node_modules` + app files only (~120 MB)
 
-Both `base` and `production` use `node:20-alpine` (musl libc) — do not change the production base to `node:20-slim` (glibc) or the `better-sqlite3` binary will segfault.
+`better-sqlite3` is a devDependency and is absent from the production image (stripped by `npm prune`). Production uses `pg` which has no native bindings. Do not change the production base to `node:20-slim` (glibc) — if `better-sqlite3` is ever promoted to a prod dependency, the binary compiled on musl (alpine) in `base` would segfault on glibc.
 
 **Dev volume note:** In dev mode the `db/` directory is covered by the source bind mount (`.:/app`). The SQLite file lives on the host at `db/radiocalico.db` (gitignored). There is no separate Docker volume for `db/` in dev — adding one would shadow `db/database.js` and break the require.
 
 ### Backend
-- **Express 5** on port 3000 (env `PORT` overrides).
-- **SQLite** via `better-sqlite3` (synchronous API). Schema auto-creates on startup in `db/database.js`. Tables: `users`, `posts`, `song_ratings`.
-- `song_ratings` uses `UNIQUE(song_key, user_token)` + `INSERT OR REPLACE` to allow vote-changing atomically.
-- User identity: server hashes the client IP with SHA-256 (`radiocalico:<ip>`) and returns it as a 1-year `rc_uid` cookie. If the cookie already exists and is valid, the same token is returned. Frontend reads it via `GET /api/token`.
+- **Express 5** on port 3000 (env `PORT` overrides). In production, nginx sits in front and proxies `/api/*` to the app; the app port is not exposed to the host. `server.js` sets `app.set('trust proxy', 1)` so `req.secure` / `req.ip` honor the headers nginx forwards.
+- **Database** is dual-mode in `db/database.js`: `pg.Pool` when `DATABASE_URL` is set (production), `better-sqlite3` with a pg-compatible `query()` adapter otherwise (dev/bare-metal). All callers use `await db.query(sql, [params])`.
+- Schema auto-creates on startup. Tables: `users`, `posts`, `song_ratings`.
+- `song_ratings` uses `UNIQUE(song_key, user_token)` + `INSERT … ON CONFLICT … DO UPDATE SET rating = EXCLUDED.rating` to allow vote-changing atomically.
+- `server.js` awaits `db.ready` before calling `app.listen` so the schema is always initialized before the first request.
+- User identity: server hashes the client IP with SHA-256 (`radiocalico:<ip>`) and returns it as a 1-year `rc_uid` cookie. The IP is sourced from `X-Real-IP` (set by nginx to `$remote_addr`, not client-controlled), falling back to `req.socket.remoteAddress` when no proxy is present. `X-Forwarded-For` is intentionally **not** trusted for the token because nginx's `$proxy_add_x_forwarded_for` retains any client-supplied XFF as the leftmost entry. If the cookie already exists and is valid, the same token is returned. Frontend reads it via `GET /api/token`.
 
 ### Frontend (`public/`)
 Split across four files with no build step, no framework. `index.html` is markup only; `style.css` has all styles; `ratings.js` has all testable pure logic; `app.js` is the DOM entry point. Load order in index.html: `hls.js` → `ratings.js` → `app.js`.

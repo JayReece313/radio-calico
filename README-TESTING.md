@@ -13,6 +13,19 @@ npm run test:backend
 
 # Frontend only
 npm run test:frontend
+
+# Security scan (fails on moderate+ vulnerabilities)
+npm run test:security
+```
+
+Or via the Makefile (`make help` lists all targets):
+
+```bash
+make test
+make test-backend
+make test-frontend
+make security
+make audit-fix    # auto-fix where possible
 ```
 
 ## Test Structure
