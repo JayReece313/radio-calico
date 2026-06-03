@@ -164,13 +164,20 @@ First paint costs ~250 KB raw, and almost none of it is cached for repeat visits
 
 3. **Pin `hls.js` and add `defer`**
    - The current tag is `https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js` — synchronous and bound to a moving `@latest` URL, which means a new CDN object on every hls.js release.
-   - Recommended:
+   - Recommended (replace `REPLACE_WITH_REAL_HASH` before committing — see one-liner below):
      ```html
      <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"
-             integrity="sha384-…" crossorigin="anonymous"></script>
+             integrity="sha384-REPLACE_WITH_REAL_HASH"
+             crossorigin="anonymous"></script>
      <script defer src="/ratings.js"></script>
      <script defer src="/app.js"></script>
      ```
+   - **Generate the SRI hash before pasting the snippet** — the placeholder above will cause the browser to block `hls.min.js` (and then `Hls` is undefined when `app.js` calls `Hls.isSupported()`). On macOS/Linux:
+     ```bash
+     curl -sSL https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js \
+       | openssl dgst -sha384 -binary | openssl base64 -A
+     ```
+     Prepend `sha384-` to the output and paste it into the `integrity` attribute. If you'd rather skip SRI entirely, delete the `integrity` attribute (the pinned version + `crossorigin="anonymous"` is still a meaningful improvement over `@latest`).
    - `defer` also removes a subtle race: `app.js` calls `Hls.isSupported()` synchronously and works today only because the script tag sits at body-end.
 
 4. **Set explicit `width` / `height` on `<img>` tags**
