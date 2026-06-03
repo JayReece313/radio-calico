@@ -65,9 +65,7 @@ docker compose up --build        # foreground
 docker compose up -d --build     # detached
 ```
 
-Copy `.env.example` to `.env` and set a strong `POSTGRES_PASSWORD` before running in production — the default password must not be used on any internet-facing deployment. Set `PORT=8080` to expose nginx on a different host port. `NODE_ENV=production` is set automatically by the compose file; this enables the `Secure` flag on the `rc_uid` cookie and same-origin-only CORS.
-
-> **Security:** `POSTGRES_PASSWORD` defaults to `radiocalico` if not set. Change it to a strong random password for any internet-facing deployment.
+Copy `.env.example` to `.env` and set a strong `POSTGRES_PASSWORD` before running. `POSTGRES_PASSWORD` is required — `docker compose up` will fail fast with an error if it is unset, so there is no insecure default to forget. Set `PORT=8080` to expose nginx on a different host port. `NODE_ENV=production` is set automatically by the compose file; this enables the `Secure` flag on the `rc_uid` cookie and same-origin-only CORS.
 
 **CORS:** cross-origin requests are blocked by default. Set `CORS_ORIGIN=https://yourdomain.com` in the app environment if you need to allow a specific external origin.
 
