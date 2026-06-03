@@ -9,7 +9,7 @@ A lossless internet radio web player with live metadata, cover art, and song rat
 - **Recently Played** — last 5 tracks with ratings
 - **Cover art** — fetched automatically from the iTunes Search API
 - **Song ratings** — thumbs up / thumbs down per track; one vote per user with the ability to change it; stored in PostgreSQL (prod) or SQLite (dev)
-- **Persistent user identity** — IP-based anonymous token set as a 1-year cookie, no login required
+- **Persistent user identity** — IP-based anonymous token (derived from nginx's `X-Real-IP`, not the spoofable `X-Forwarded-For`) set as a 1-year cookie, no login required
 
 ## Tech Stack
 

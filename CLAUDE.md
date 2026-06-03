@@ -70,12 +70,12 @@ docker-compose.dev.yml  Development (source bind-mounted; SQLite on host at db/r
 **Dev volume note:** In dev mode the `db/` directory is covered by the source bind mount (`.:/app`). The SQLite file lives on the host at `db/radiocalico.db` (gitignored). There is no separate Docker volume for `db/` in dev — adding one would shadow `db/database.js` and break the require.
 
 ### Backend
-- **Express 5** on port 3000 (env `PORT` overrides). In production, nginx sits in front and proxies `/api/*` to the app; the app port is not exposed to the host.
+- **Express 5** on port 3000 (env `PORT` overrides). In production, nginx sits in front and proxies `/api/*` to the app; the app port is not exposed to the host. `server.js` sets `app.set('trust proxy', 1)` so `req.secure` / `req.ip` honor the headers nginx forwards.
 - **Database** is dual-mode in `db/database.js`: `pg.Pool` when `DATABASE_URL` is set (production), `better-sqlite3` with a pg-compatible `query()` adapter otherwise (dev/bare-metal). All callers use `await db.query(sql, [params])`.
 - Schema auto-creates on startup. Tables: `users`, `posts`, `song_ratings`.
 - `song_ratings` uses `UNIQUE(song_key, user_token)` + `INSERT … ON CONFLICT … DO UPDATE SET rating = EXCLUDED.rating` to allow vote-changing atomically.
 - `server.js` awaits `db.ready` before calling `app.listen` so the schema is always initialized before the first request.
-- User identity: server hashes the client IP with SHA-256 (`radiocalico:<ip>`) and returns it as a 1-year `rc_uid` cookie. If the cookie already exists and is valid, the same token is returned. Frontend reads it via `GET /api/token`.
+- User identity: server hashes the client IP with SHA-256 (`radiocalico:<ip>`) and returns it as a 1-year `rc_uid` cookie. The IP is sourced from `X-Real-IP` (set by nginx to `$remote_addr`, not client-controlled), falling back to `req.socket.remoteAddress` when no proxy is present. `X-Forwarded-For` is intentionally **not** trusted for the token because nginx's `$proxy_add_x_forwarded_for` retains any client-supplied XFF as the leftmost entry. If the cookie already exists and is valid, the same token is returned. Frontend reads it via `GET /api/token`.
 
 ### Frontend (`public/`)
 Split across four files with no build step, no framework. `index.html` is markup only; `style.css` has all styles; `ratings.js` has all testable pure logic; `app.js` is the DOM entry point. Load order in index.html: `hls.js` → `ratings.js` → `app.js`.
