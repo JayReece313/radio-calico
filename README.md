@@ -178,7 +178,7 @@ First paint costs ~250 KB raw, and almost none of it is cached for repeat visits
        | openssl dgst -sha384 -binary | openssl base64 -A
      ```
      Prepend `sha384-` to the output and paste it into the `integrity` attribute. If you'd rather skip SRI entirely, delete the `integrity` attribute (the pinned version + `crossorigin="anonymous"` is still a meaningful improvement over `@latest`).
-   - `defer` also removes a subtle race: `app.js` calls `Hls.isSupported()` synchronously and works today only because the script tag sits at body-end.
+   - `defer` makes it safe to move the scripts out of body-end while keeping execution ordered relative to each other. The real load-time requirement is **execution order** — `hls.min.js` must run before `app.js`, because `app.js` calls `Hls.isSupported()` at top level — and a secondary dependency on DOM readiness for the elements `app.js` queries. Today's correctness comes from the tags appearing in that order in `index.html`; moving them into `<head>` with `defer` preserves both invariants (deferred scripts execute after the document is parsed, in document order).
 
 4. **Set explicit `width` / `height` on `<img>` tags**
    - Both `#nowArt` and `.footer-logo` lack intrinsic sizes in markup, so the browser reflows when they load (Cumulative Layout Shift hit). One attribute pair on each fixes it.
