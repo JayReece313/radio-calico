@@ -11,6 +11,7 @@ sequenceDiagram
     participant N as nginx :80
     participant E as Express :3000<br/>(routes/api.js)
     participant DB as PostgreSQL<br/>(song_ratings)
+    participant CF as CloudFront CDN<br/>(metadatav2.json)
 
     Note over B,DB: Page load — token resolution happens once
     B->>N: GET /api/token (cookie: rc_uid?)
@@ -46,7 +47,8 @@ sequenceDiagram
     end
 
     Note over B,DB: 15s later — metadata poll re-renders the card
-    B->>N: GET metadatav2.json (CloudFront — not shown)
+    B->>CF: GET metadatav2.json
+    CF-->>B: { artist, title, album, prev_artist_1…5, prev_title_1…5 }
     Note right of B: renderNowPlaying clones buttons (sheds stale listeners),<br/>then immediately calls applyCachedVote(songKey) from votedSongs<br/>before awaiting fetchRatings — so the 👍 stays locked with no flicker
     B->>N: GET /api/ratings?song_key=&user_token=
     N->>E: proxy
