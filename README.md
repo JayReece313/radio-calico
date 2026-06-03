@@ -121,3 +121,76 @@ See [README-TESTING.md](README-TESTING.md) for full details on test structure an
 ## Brand
 
 Colors, typography, and logo usage are defined in `RadioCalico_Style_Guide.txt`. The palette uses Mint (`#D8F2D5`), Forest Green (`#1F4E23`), Teal (`#38A29D`), and Charcoal (`#231F20`) with Montserrat and Open Sans typefaces.
+
+## Improvements to Page Speed
+
+A static audit of `public/`, `index.html`, and `nginx.conf` surfaced the following opportunities. Findings are recorded here as a backlog; no code changes have been applied yet.
+
+### Current state (resources fetched before "ready to play")
+
+| Resource | Size | Source | Notes |
+|---|---|---|---|
+| `index.html` | 4 KB | `public/` | uncompressed, no cache headers |
+| `style.css` | 8 KB | `public/` | uncompressed, no cache headers |
+| `app.js` | 11 KB | `public/` | uncompressed, no cache headers, sync `<script>` |
+| `ratings.js` | 2 KB | `public/` | same |
+| `RadioCalicoLogoTM.png` | 56 KB, 672×672 | `public/` | rendered at 28 px (nav) and 40 px (footer) — ~24× oversized |
+| `hls.min.js` | ~110 KB | `cdn.jsdelivr.net/npm/hls.js@latest` | `@latest` defeats long-term CDN caching; sync `<script>` |
+| Google Fonts CSS + 2 families | ~50 KB | fonts.googleapis.com | render-blocking; `preconnect` is set |
+
+First paint costs ~250 KB raw, and almost none of it is cached for repeat visits.
+
+### Recommended fixes (ranked by impact ÷ effort)
+
+1. **Enable gzip/brotli + cache headers in `nginx.conf`** *(largest single win)*
+   - Text assets currently ship uncompressed. Compression alone cuts roughly 75% off `app.js`, `style.css`, and the Google Fonts CSS. There are also no `Cache-Control` headers, so every navigation re-downloads everything.
+   - Example:
+     ```nginx
+     gzip on;
+     gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+     gzip_min_length 256;
+     gzip_vary on;
+
+     location ~* \.(?:css|js|png|svg|woff2)$ {
+         expires 30d;
+         add_header Cache-Control "public, max-age=2592000";
+     }
+     ```
+
+2. **Shrink the logo asset**
+   - `RadioCalicoLogoTM.png` is 672×672 for a 28-pixel nav slot and a 40-pixel footer slot.
+   - Easiest: replace with an SVG (~2–5 KB, scales perfectly) — saves ~50 KB and looks sharper on retina.
+   - Alternative: generate two raster sizes (`logo-56.png` for nav @2×, `logo-80.png` for footer @2×).
+
+3. **Pin `hls.js` and add `defer`**
+   - The current tag is `https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js` — synchronous and bound to a moving `@latest` URL, which means a new CDN object on every hls.js release.
+   - Recommended:
+     ```html
+     <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"
+             integrity="sha384-…" crossorigin="anonymous"></script>
+     <script defer src="/ratings.js"></script>
+     <script defer src="/app.js"></script>
+     ```
+   - `defer` also removes a subtle race: `app.js` calls `Hls.isSupported()` synchronously and works today only because the script tag sits at body-end.
+
+4. **Set explicit `width` / `height` on `<img>` tags**
+   - Both `#nowArt` and `.footer-logo` lack intrinsic sizes in markup, so the browser reflows when they load (Cumulative Layout Shift hit). One attribute pair on each fixes it.
+
+5. **Enable HTTP/2 in nginx**
+   - The listener is currently HTTP/1.1 on port 80. HTTP/2 multiplexes the 6–7 parallel requests (HTML → CSS → font CSS → 2 font files → 2 scripts → logo) over one connection. Requires TLS in practice: `listen 443 ssl http2;` once a certificate is added.
+
+6. **Self-host or preload the two font files**
+   - `preconnect` to `fonts.gstatic.com` is set, but the actual WOFF2 URLs aren't known until the Google CSS arrives — that's two RTTs before text renders. Either:
+     - Add `<link rel="preload" as="font" type="font/woff2" href="..." crossorigin>` for the specific WOFF2 file used, **or**
+     - Self-host both families (~30 KB woff2 each) and serve them with the cache headers from fix #1.
+
+### Smaller wins (optional)
+
+- **Inline critical CSS** for the nav and Now-Playing card so the first paint doesn't depend on `style.css`.
+- Add `loading="lazy"` to `.footer-logo` (always below the fold).
+- Pipeline the first metadata poll in parallel with `GET /api/token` (`Promise.all`) so the Now-Playing card paints one RTT sooner.
+- Minify `index.html` in production (it's only 4 KB, so the payoff is small).
+
+### Suggested first PR
+
+Bundling fixes **#1 (nginx gzip + cache)**, **#2 (logo)**, and **#3 (pin hls.js + defer)** into a single PR is ~30 lines of changes total, has no architectural impact, and likely halves transferred bytes and time-to-interactive on repeat visits.
