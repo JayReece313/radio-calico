@@ -183,6 +183,7 @@ First paint costs ~250 KB raw, and almost none of it is cached for repeat visits
    - `preconnect` to `fonts.gstatic.com` is set, but the actual WOFF2 URLs aren't known until the Google CSS arrives — that's two RTTs before text renders. Either:
      - Add `<link rel="preload" as="font" type="font/woff2" href="..." crossorigin>` for the specific WOFF2 file used, **or**
      - Self-host both families (~30 KB woff2 each) and serve them with the cache headers from fix #1.
+   - **CSP update required when self-hosting.** The current `Content-Security-Policy` in `nginx.conf` restricts `font-src` to `fonts.gstatic.com` only — `'self'` is **not** allowed, so locally-served WOFF2 files would be blocked by the browser. Before this fix can ship, add `'self'` to `font-src` (e.g. `font-src 'self' fonts.gstatic.com`). If the Google Fonts CSS is also pulled in-house, the inline `<link>` tag will then load from `'self'`, which `style-src` already permits — but verify, and if the CSS itself moves to a separate file under `/public`, no further `style-src` change is needed. Only the `font-src` change is mandatory.
 
 ### Smaller wins (optional)
 
